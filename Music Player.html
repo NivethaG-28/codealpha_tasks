@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonic — Music Player</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #030305;
+  --glass: rgba(255,255,255,0.03);
+  --glass-border: rgba(255,255,255,0.06);
+  --text: #f0eef5;
+  --dim: #5a5670;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+  --violet: #a78bfa;
+  --lime: #a3e635;
+  --sans: 'Syne', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* --- MESH GRADIENT BG --- */
+.mesh-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.mesh-bg .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+
+.mesh-bg .blob.active { opacity: 1; }
+
+.blob-1 { width: 600px; height: 600px; background: rgba(34,211,238,0.08); top: -15%; left: -10%; }
+.blob-2 { width: 500px; height: 500px; background: rgba(244,114,182,0.07); bottom: -20%; right: -10%; }
+.blob-3 { width: 400px; height: 400px; background: rgba(167,139,250,0.06); top: 40%; left: 50%; transform: translate(-50%,-50%); }
+
+/* --- MAIN CONTAINER --- */
+.app {
+  position: relative;
+  z-index: 1;
+  width: 1100px;
+  max-width: 96vw;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-rows: auto auto;
+  gap: 0;
+  border-radius: 28px;
+  border: 1px solid var(--glass-border);
+  background: rgba(8,8,16,0.7);
+  backdrop-filter: blur(40px);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02),
+    0 50px 100px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* --- LEFT PANEL: ALBUM --- */
+.album-panel {
+  grid-row: 1 / 3;
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0,0,0,0.3);
+  border-right: 1px solid var(--glass-border);
+}
+
+.album-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.album-cover .gradient-layer {
+  position: absolute;
+  inset: 0;
+  transition: background 0.8s var(--ease);
+}
+
+.album-cover .waveform-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 30px;
+  opacity: 0.2;
+}
+
+.waveform-bg .wv {
+  width: 3px;
+  background: white;
+  border-radius: 2px;
+  transition: height 0.15s ease;
+}
+
+.album-cover .center-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.center-ring .inner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+}
+
+.album-info { margin-bottom: auto; }
+
+.album-info .genre {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+  margin-bottom: 0.6rem;
+}
+
+.album-info h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 0.3rem;
+}
+
+.album-info .artist {
+  font-size: 0.95rem;
+  color: var(--dim);
+  font-weight: 400;
+}
+
+/* --- TRACK INFO SECTION --- */
+.track-info {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.track-info .track-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 0.15rem;
+}
+
+.track-info .track-artist-small {
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+
+/* --- PROGRESS BAR --- */
+.progress-wrapper {
+  margin-top: 1.5rem;
+}
+
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+}
+
+.progress-track:hover { height: 6px; margin-top: -1px; margin-bottom: -1px; }
+
+.progress-progress {
+  height: 100%;
+  border-radius: 4px;
+  width: 0%;
+  position: relative;
+  transition: width 0.15s linear;
+}
+
+.progress-progress .prog-gradient {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--cyan), var(--pink));
+}
+
+.progress-thumb {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(34,211,238,0.5);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.progress-track:hover .progress-thumb { opacity: 1; }
+
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--dim);
+  font-weight: 300;
+}
+
+/* --- CONTROLS --- */
+.controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  margin-top: 1.5rem;
+}
+
+.ctrl {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--dim);
+  transition: all 0.3s var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.ctrl:hover { color: var(--text); }
+
+.ctrl svg { width: 20px; height: 20px; }
+
+.ctrl-main {
+  width: 58px;
+  height: 58px;
+  background: linear-gradient(135deg, var(--cyan), var(--pink));
+  border-radius: 50%;
+  color: white !important;
+  box-shadow: 0 4px 25px rgba(34,211,238,0.25), 0 4px 25px rgba(244,114,182,0.15);
+  transition: all 0.3s var(--ease);
+}
+
+.ctrl-main:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 35px rgba(34,211,238,0.35), 0 6px 35px rgba(244,114,182,0.25);
+}
+
+.ctrl-main svg { width: 24px; height: 24px; }
+
+.ctrl.active { color: var(--cyan) !important; }
+
+/* --- VOLUME ROW --- */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+}
+
+.volume-row svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.vol-track {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+}
+
+.vol-fill {
+  height: 100%;
+  width: 65%;
+  background: var(--dim);
+  border-radius: 3px;
+  transition: background 0.3s;
+}
+
+.vol-track:hover .vol-fill { background: var(--cyan); }
+
+/* --- RIGHT PANEL --- */
+.right-panel {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- HEADER --- */
+.panel-header {
+  padding: 2rem 2.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.panel-header h3 {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.view-btns {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.view-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s var(--ease);
+}
+
+.view-btn.active, .view-btn:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.view-btn svg { width: 14px; height: 14px; }
+
+/* --- TRACK LIST --- */
+.track-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.5rem;
+}
+
+.track-list::-webkit-scrollbar { width: 4px; }
+.track-list::-webkit-scrollbar-track { background: transparent; }
+.track-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+
+.track-row {
+  display: grid;
+  grid-template-columns: 30px 44px 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s var(--ease);
+  position: relative;
+}
+
+.track-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.track-row.active {
+  background: rgba(34,211,238,0.05);
+}
+
+.track-row.active .tr-title { color: var(--cyan); }
+
+.tr-num {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-align: center;
+}
+
+.track-row.active .tr-num { display: none; }
+
+.tr-eq {
+  display: none;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+
+.track-row.active .tr-eq { display: flex; }
+
+.tr-eq span {
+  width: 2px;
+  background: var(--cyan);
+  border-radius: 1px;
+  animation: trEq 0.7s ease infinite;
+}
+
+.tr-eq span:nth-child(1) { animation-delay: 0s; }
+.tr-eq span:nth-child(2) { animation-delay: 0.15s; }
+.tr-eq span:nth-child(3) { animation-delay: 0.3s; }
+.tr-eq span:nth-child(4) { animation-delay: 0.45s; }
+
+@keyframes trEq {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+.tr-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.tr-thumb-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+
+.tr-meta { min-width: 0; }
+
+.tr-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s;
+}
+
+.tr-artist {
+  font-size: 0.75rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tr-like {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0.3rem;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+}
+
+.tr-like:hover { color: var(--pink); }
+.tr-like.liked { color: var(--pink); }
+
+.tr-like svg { width: 16px; height: 16px; }
+
+.tr-dur {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--dim);
+  font-weight: 300;
+}
+
+/* --- BOTTOM BAR: EQUALIZER PRESETS --- */
+.bottom-bar {
+  grid-column: 2;
+  padding: 1rem 2.5rem;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.eq-label {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.eq-presets {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.eq-presets::-webkit-scrollbar { display: none; }
+
+.eq-preset {
+  padding: 0.35rem 0.9rem;
+  border-radius: 100px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s var(--ease);
+}
+
+.eq-preset:hover {
+  border-color: rgba(255,255,255,0.15);
+  color: var(--text);
+}
+
+.eq-preset.active {
+  background: rgba(34,211,238,0.1);
+  border-color: rgba(34,211,238,0.25);
+  color: var(--cyan);
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 850px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    max-height: 96vh;
+  }
+
+  .album-panel {
+    grid-row: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--glass-border);
+    flex-direction: row;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .album-cover {
+    width: 140px;
+    aspect-ratio: 1;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .album-info { flex: 1; min-width: 150px; }
+  .album-info h2 { font-size: 1.2rem; }
+  .track-info { display: none; }
+  .progress-wrapper { width: 100%; margin-top: 1rem; }
+  .controls-row { width: 100%; margin-top: 1rem; }
+  .volume-row { display: none; }
+
+  .right-panel { grid-column: 1; }
+  .bottom-bar { grid-column: 1; }
+
+  .track-list { max-height: 30vh; }
+}
+</style>
+</head>
+<body>
+
+<div class="mesh-bg">
+  <div class="blob blob-1 active"></div>
+  <div class="blob blob-2 active"></div>
+  <div class="blob blob-3 active"></div>
+</div>
+
+<div class="app">
+  <!-- LEFT: ALBUM PANEL -->
+  <div class="album-panel">
+    <div class="album-cover">
+      <div class="gradient-layer" id="albumGradient"></div>
+      <div class="waveform-bg" id="waveformBg"></div>
+      <div class="center-ring"><div class="inner"></div></div>
+    </div>
+
+    <div class="album-info">
+      <div class="genre" id="albumGenre">Electronic / Ambient</div>
+      <h2 id="albumTitle">Neon Horizons</h2>
+      <div class="artist" id="albumArtist">Synthwave Collective</div>
+    </div>
+
+    <div class="track-info">
+      <div class="track-name" id="trackName">Midnight Signal</div>
+      <div class="track-artist-small" id="trackArtistSmall">ft. Neon Drift</div>
+    </div>
+
+    <div class="progress-wrapper">
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-progress" id="progressBar">
+          <div class="prog-gradient"></div>
+          <div class="progress-thumb"></div>
+        </div>
+      </div>
+      <div class="time-row">
+        <span id="timeNow">0:00</span>
+        <span id="timeTotal">3:42</span>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <button class="ctrl" id="shuffleBtn" title="Shuffle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </button>
+      <button class="ctrl" id="prevBtn" title="Previous">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2" height="16" rx="1"/></svg>
+      </button>
+      <button class="ctrl ctrl-main" id="playBtn" title="Play">
+        <svg id="iconPlay" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 3 21 12 7 21 7 3"/></svg>
+        <svg id="iconPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="5" y="3" width="5" height="18" rx="1"/><rect x="14" y="3" width="5" height="18" rx="1"/></svg>
+      </button>
+      <button class="ctrl" id="nextBtn" title="Next">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16" rx="1"/></svg>
+      </button>
+      <button class="ctrl" id="repeatBtn" title="Repeat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button>
+    </div>
+
+    <div class="volume-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      <div class="vol-track" id="volTrack">
+        <div class="vol-fill" id="volFill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: TRACK LIST -->
+  <div class="right-panel">
+    <div class="panel-header">
+      <h3>Up Next</h3>
+      <div class="view-btns">
+        <button class="view-btn active" title="List view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
+        <button class="view-btn" title="Grid view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="track-list" id="trackList"></div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottom-bar">
+    <span class="eq-label">EQ</span>
+    <div class="eq-presets" id="eqPresets">
+      <button class="eq-preset" data-preset="flat">Flat</button>
+      <button class="eq-preset active" data-preset="boost">Bass Boost</button>
+      <button class="eq-preset" data-preset="vocal">Vocal</button>
+      <button class="eq-preset" data-preset="electronic">Electronic</button>
+      <button class="eq-preset" data-preset="acoustic">Acoustic</button>
+      <button class="eq-preset" data-preset="late">Late Night</button>
+      <button class="eq-preset" data-preset="live">Live</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========== DATA ========== */
+const tracks = [
+  { title: 'Midnight Signal', artist: 'Neon Drift', feat: 'ft. Neon Drift', duration: '3:42', album: 'Neon Horizons', genre: 'Electronic / Ambient', gradient: 'linear-gradient(135deg, #0e7490, #7c3aed)', colors: ['#22d3ee','#f472b6'] },
+  { title: 'Chrome Horizon', artist: 'Synthwave Collective', feat: 'Solo', duration: '4:18', album: 'Neon Horizons', genre: 'Synthwave', gradient: 'linear-gradient(135deg, #1e40af, #06b6d4)', colors: ['#3b82f6','#06b6d4'] },
+  { title: 'Velvet Static', artist: 'Luna Echo', feat: 'ft. Astral Haze', duration: '3:55', album: 'Neon Horizons', genre: 'Dream Pop', gradient: 'linear-gradient(135deg, #9333ea, #ec4899)', colors: ['#a78bfa','#f472b6'] },
+  { title: 'Neon Rainfall', artist: 'Digital Prism', feat: 'Solo', duration: '5:01', album: 'Neon Horizons', genre: 'Ambient', gradient: 'linear-gradient(135deg, #0d9488, #22d3ee)', colors: ['#14b8a6','#22d3ee'] },
+  { title: 'Ghost Frequency', artist: 'Vapor Memory', feat: 'Solo', duration: '3:28', album: 'Neon Horizons', genre: 'Vaporwave', gradient: 'linear-gradient(135deg, #ea580c, #f43f5e)', colors: ['#f97316','#f43f5e'] },
+  { title: 'Crystal Drift', artist: 'Astral Haze', feat: 'ft. Luna Echo', duration: '4:44', album: 'Neon Horizons', genre: 'Chillwave', gradient: 'linear-gradient(135deg, #7c3aed, #2563eb)', colors: ['#a78bfa','#60a5fa'] },
+  { title: 'Binary Sunset', artist: 'Neon Drift', feat: 'Solo', duration: '3:16', album: 'Neon Horizons', genre: 'Electronic', gradient: 'linear-gradient(135deg, #dc2626, #f97316)', colors: ['#ef4444','#f97316'] },
+  { title: 'Phosphor Dream', artist: 'Cyber Orchid', feat: 'ft. Digital Prism', duration: '4:32', album: 'Neon Horizons', genre: 'Downtempo', gradient: 'linear-gradient(135deg, #059669, #7c3aed)', colors: ['#10b981','#a78bfa'] },
+  { title: 'Ultraviolet', artist: 'Synthwave Collective', feat: 'Solo', duration: '3:58', album: 'Neon Horizons', genre: 'Synthwave', gradient: 'linear-gradient(135deg, #6d28d9, #db2777)', colors: ['#8b5cf6','#ec4899'] },
+  { title: 'Stellar Echo', artist: 'Luna Echo', feat: 'Solo', duration: '4:07', album: 'Neon Horizons', genre: 'Space Ambient', gradient: 'linear-gradient(135deg, #0891b2, #4f46e5)', colors: ['#22d3ee','#818cf8'] },
+];
+
+/* ========== STATE ========== */
+let current = 0;
+let playing = false;
+let shuffle = false;
+let repeat = false;
+let elapsed = 0;
+let totalSec = 222;
+let timer = null;
+let liked = new Set();
+
+/* ========== DOM ========== */
+const $ = id => document.getElementById(id);
+
+const albumGradient = $('albumGradient');
+const albumGenre = $('albumGenre');
+const albumTitle = $('albumTitle');
+const albumArtistEl = $('albumArtist');
+const trackName = $('trackName');
+const trackArtistSmall = $('trackArtistSmall');
+const progressBar = $('progressBar');
+const timeNow = $('timeNow');
+const timeTotal = $('timeTotal');
+const playBtn = $('playBtn');
+const iconPlay = $('iconPlay');
+const iconPause = $('iconPause');
+const prevBtn = $('prevBtn');
+const nextBtn = $('nextBtn');
+const shuffleBtn = $('shuffleBtn');
+const repeatBtn = $('repeatBtn');
+const progressTrack = $('progressTrack');
+const volTrack = $('volTrack');
+const volFill = $('volFill');
+const trackList = $('trackList');
+const waveformBg = $('waveformBg');
+
+/* ========== HELPERS ========== */
+function parseDur(s) {
+  const p = s.split(':');
+  return parseInt(p[0]) * 60 + parseInt(p[1]);
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/* ========== WAVEFORM BG ========== */
+function buildWaveform() {
+  waveformBg.innerHTML = '';
+  for (let i = 0; i < 60; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'wv';
+    const h = 10 + Math.random() * 80;
+    bar.style.height = h + '%';
+    waveformBg.appendChild(bar);
+  }
+}
+
+function animateWaveform() {
+  const bars = waveformBg.querySelectorAll('.wv');
+  bars.forEach(bar => {
+    const h = playing ? (15 + Math.random() * 70) : (10 + Math.random() * 20);
+    bar.style.height = h + '%';
+  });
+  if (playing) setTimeout(animateWaveform, 150);
+}
+
+/* ========== RENDER TRACK LIST ========== */
+function renderList() {
+  trackList.innerHTML = '';
+  tracks.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = `track-row${i === current ? ' active' : ''}`;
+    const isLiked = liked.has(i);
+    row.innerHTML = `
+      <span class="tr-num">${i + 1}</span>
+      <div class="tr-eq"><span></span><span></span><span></span><span></span></div>
+      <div class="tr-thumb"><div class="tr-thumb-bg" style="background:${t.gradient}"></div></div>
+      <div class="tr-meta">
+        <div class="tr-title">${t.title}</div>
+        <div class="tr-artist">${t.artist}</div>
+      </div>
+      <button class="tr-like ${isLiked ? 'liked' : ''}" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+      <span class="tr-dur">${t.duration}</span>
+    `;
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.tr-like')) return;
+      loadTrack(i);
+      if (!playing) togglePlay();
+    });
+    trackList.appendChild(row);
+  });
+
+  // Like buttons
+  trackList.querySelectorAll('.tr-like').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx);
+      if (liked.has(idx)) {
+        liked.delete(idx);
+      } else {
+        liked.add(idx);
+      }
+      renderList();
+    });
+  });
+}
+
+/* ========== LOAD TRACK ========== */
+function loadTrack(idx) {
+  current = idx;
+  const t = tracks[idx];
+  albumGradient.style.background = t.gradient;
+  albumGenre.textContent = t.genre;
+  albumTitle.textContent = t.album;
+  albumArtistEl.textContent = t.artist;
+  trackName.textContent = t.title;
+  trackArtistSmall.textContent = t.feat;
+  totalSec = parseDur(t.duration);
+  timeTotal.textContent = t.duration;
+  elapsed = 0;
+  progressBar.style.width = '0%';
+  timeNow.textContent = '0:00';
+  renderList();
+  buildWaveform();
+}
+
+/* ========== PLAY / PAUSE ========== */
+function togglePlay() {
+  playing = !playing;
+  iconPlay.style.display = playing ? 'none' : 'block';
+  iconPause.style.display = playing ? 'block' : 'none';
+
+  if (playing) {
+    startTimer();
+    animateWaveform();
+  } else {
+    clearInterval(timer);
+  }
+}
+
+function startTimer() {
+  clearInterval(timer);
+  timer = setInterval(() => {
+    if (elapsed < totalSec) {
+      elapsed++;
+      const pct = (elapsed / totalSec) * 100;
+      progressBar.style.width = pct + '%';
+      timeNow.textContent = fmtTime(elapsed);
+    } else {
+      if (repeat) {
+        elapsed = 0;
+      } else {
+        goNext();
+      }
+    }
+  }, 1000);
+}
+
+/* ========== NAVIGATION ========== */
+function goNext() {
+  let n;
+  if (shuffle) {
+    do { n = Math.floor(Math.random() * tracks.length); } while (n === current && tracks.length > 1);
+  } else {
+    n = (current + 1) % tracks.length;
+  }
+  loadTrack(n);
+  if (playing) startTimer();
+}
+
+function goPrev() {
+  if (elapsed > 3) {
+    elapsed = 0;
+    progressBar.style.width = '0%';
+    timeNow.textContent = '0:00';
+  } else {
+    const p = (current - 1 + tracks.length) % tracks.length;
+    loadTrack(p);
+  }
+  if (playing) startTimer();
+}
+
+/* ========== EVENTS ========== */
+playBtn.addEventListener('click', togglePlay);
+nextBtn.addEventListener('click', goNext);
+prevBtn.addEventListener('click', goPrev);
+
+shuffleBtn.addEventListener('click', () => {
+  shuffle = !shuffle;
+  shuffleBtn.classList.toggle('active', shuffle);
+});
+
+repeatBtn.addEventListener('click', () => {
+  repeat = !repeat;
+  repeatBtn.classList.toggle('active', repeat);
+});
+
+/* --- Progress seek --- */
+progressTrack.addEventListener('click', (e) => {
+  const rect = progressTrack.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  elapsed = Math.floor(pct * totalSec);
+  progressBar.style.width = (pct * 100) + '%';
+  timeNow.textContent = fmtTime(elapsed);
+});
+
+/* --- Volume --- */
+volTrack.addEventListener('click', (e) => {
+  const rect = volTrack.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  volFill.style.width = (pct * 100) + '%';
+});
+
+/* --- EQ Presets --- */
+document.querySelectorAll('.eq-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.eq-preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+/* --- Keyboard --- */
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight') goNext();
+  if (e.code === 'ArrowLeft') goPrev();
+});
+
+/* ========== INIT ========== */
+loadTrack(0);
+</script>
+</body>
+</html>
